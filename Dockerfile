@@ -1,33 +1,43 @@
-# ---- Stage 1: Build ----
-FROM composer:2 AS build
-WORKDIR /app
+# ---- Stage 1: Build environment ----
+FROM php:8.3-cli AS build
 
-# Copy and install PHP dependencies
-COPY composer.json composer.lock ./
-RUN composer install --no-dev --optimize-autoloader
-
-# Copy the rest of the project
-COPY . .
-
-# Copy example env if missing
-RUN cp .env.example .env || true
-RUN php artisan key:generate --force
-
-# ---- Stage 2: Runtime ----
-FROM php:8.3-apache
-
-# Install necessary extensions
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     git unzip libpng-dev libonig-dev libxml2-dev zip curl \
-    && docker-php-ext-install pdo pdo_mysql mbstring exif pcntl bcmath gd
+    && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
 
-# Enable Apache mod_rewrite
-RUN a2enmod rewrite
+# Install Composer
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
+WORKDIR /app
+
+# Copy dependency files
+COPY composer.json composer.lock ./
+
+# Install dependencies
+RUN composer install --no-dev --optimize-autoloader --no-interaction --no-scripts
+
+# Copy the rest of the app
+COPY . .
+
+# Generate app key
+RUN cp .env.example .env || true && php artisan key:generate --force
+
+# ---- Stage 2: Production environment ----
+FROM php:8.3-apache
+
+# Install PHP extensions and Apache mods
+RUN apt-get update && apt-get install -y \
+    libpng-dev libonig-dev libxml2-dev zip unzip curl git \
+    && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd \
+    && a2enmod rewrite
 
 WORKDIR /var/www/html
+
+# Copy app from build stage
 COPY --from=build /app ./
 
-# Set correct permissions
+# Set proper permissions
 RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
 
 # Laravel Apache config
