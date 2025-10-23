@@ -26,7 +26,7 @@ COPY . .
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 755 /var/www/html/storage /var/www/html/bootstrap/cache
 
-# Expose port 9000 and start PHP-FPM
-EXPOSE 9000
-CMD ["php-fpm"]
+# Expose port 8080 and start PHP-FPM
+EXPOSE 8080
+CMD php artisan serve --host=0.0.0.0 --port=8080
 
