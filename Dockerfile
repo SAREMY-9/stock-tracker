@@ -1,35 +1,46 @@
 # Use the official PHP 8.3 image with Apache
 FROM php:8.3-apache
 
-# Enable Apache mod_rewrite (required by Laravel)
-RUN a2enmod rewrite
-
-# Install system dependencies and PHP extensions (including zip)
+# Install system dependencies and PHP extensions
 RUN apt-get update && apt-get install -y \
-    git zip unzip libpng-dev libonig-dev libxml2-dev sqlite3 libsqlite3-dev libzip-dev \
-    && docker-php-ext-install pdo pdo_mysql pdo_sqlite mbstring exif pcntl bcmath gd zip
+    git unzip zip libzip-dev libpng-dev libonig-dev libxml2-dev \
+    && docker-php-ext-install pdo_mysql gd zip bcmath exif \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Set working directory inside the container
+# Enable Apache modules required by Laravel
+RUN a2enmod rewrite headers
+
+# Set working directory
 WORKDIR /var/www/html
 
-# Copy the existing application code
+# Copy project files to the container
 COPY . /var/www/html
 
-# Copy Composer from the Composer official image
+# Update Apache DocumentRoot to point to Laravel's "public" directory
+RUN sed -i 's|DocumentRoot /var/www/html|DocumentRoot /var/www/html/public|g' /etc/apache2/sites-available/000-default.conf
+
+# Add rewrite rules so Laravel routes work properly
+RUN echo '<Directory /var/www/html/public>\n\
+    AllowOverride All\n\
+    Require all granted\n\
+</Directory>' >> /etc/apache2/apache2.conf
+
+# Copy Composer from official image
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 # Install PHP dependencies
-RUN composer install --no-dev --optimize-autoloader
+RUN composer install --no-dev --optimize-autoloader --no-interaction
 
-# Copy Laravel environment example and generate key if needed
+# Generate application key (safe if .env.example exists)
 RUN cp .env.example .env || true && php artisan key:generate --force
 
-# Set proper permissions for Laravel storage and cache directories
-RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
+# Set file permissions for storage and cache
+RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache \
+    && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
 
-# Expose port 80 for the web server
+# Expose port 80 to Render
 EXPOSE 80
 
-# Start Apache when the container runs
+# Start Apache in the foreground
 CMD ["apache2-foreground"]
 
