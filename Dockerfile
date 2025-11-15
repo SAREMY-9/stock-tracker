@@ -78,5 +78,10 @@ RUN chown -R www-data:www-data /var/www/html \
 # Expose HTTP port
 EXPOSE 8080
 
+ENV APP_ENV=production
+ENV APP_DEBUG=false
+ENV VITE_DEV_SERVER=false
+
 # Command to start the application
 CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8080"]
+
